@@ -1,0 +1,4 @@
+streamlit
+pypdf
+huggingface_hub
+python-dotenv
