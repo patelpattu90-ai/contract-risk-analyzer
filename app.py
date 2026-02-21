@@ -2,6 +2,7 @@ import streamlit as st
 from utils.pdf_loader import extract_text_from_pdf
 from utils.llm import summarize_contract, summarize_chunks
 from utils.chunker import chunk_text
+import requests
 
 st.set_page_config(page_title="Contract Risk Analyzer", layout="wide")
 
@@ -27,11 +28,13 @@ if uploaded_file:
     st.subheader("Extracted Text (Preview)")
     st.text_area("", document_text[:3000], height=250)
 
-    if st.button("Generate Contract Summary"):
-        with st.spinner("Chunking and Analyzing contract..."):
-            chunks = chunk_text(document_text)
-            summary = summarize_chunks(chunks)
+if st.button("Generate Contract Summary"):
+    with st.spinner("Sending document to backend..."):
+        response = requests.post(
+            "http://127.0.0.1:8000/summarize",
+            json={"text": document_text}
+        )
+        summary = response.json()["summary"]
 
-
-        st.subheader("🧠 AI Summary(chunked)")
-        st.write(summary)
+    st.subheader("🧠 AI Summary (via FastAPI)")
+    st.write(summary)

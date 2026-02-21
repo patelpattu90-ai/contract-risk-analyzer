@@ -1,83 +1,56 @@
-import os
-from huggingface_hub import InferenceClient
-from dotenv import load_dotenv
+# utils/llm.py
 
-load_dotenv()
+from transformers import pipeline
 
-client = InferenceClient(
-    model="google/flan-t5-large",
-    token=os.getenv("HF_API_KEY")
+# Load a pure text-generation model (local, stable)
+generator = pipeline(
+    "text-generation",
+    model="distilgpt2"
 )
-
-def summarize_contract(text: str) -> str:
-    prompt = f"""
-You are a legal assistant.
-
-Summarize the following contract in simple language.
-Focus on:
-- obligations
-- payment terms
-- termination clauses
-- potential risks
-
-Contract text:
-{text[:4000]}
-"""
-    response = client.text_generation(
-        prompt,
-        max_new_tokens=300,
-        temperature=0.3
-    )
-
 
 def summarize_chunks(chunks):
     """
-    Summarize each chunk individually, then combine them
-    into a final high-level contract summary. 
+    Summarize each chunk individually and combine results.
     """
+    summaries = []
 
-    chunk_summaries = []
+    for chunk in chunks:
+        if not chunk or len(chunk.strip()) < 30:
+            continue
 
-    for idx, chunk in enumerate(chunks):
-        prompt = f"""
-You are a legal assistant.
+        prompt = (
+            "Summarize the following contract text in simple terms:\n\n"
+            f"{chunk}\n\nSummary:"
+        )
 
-Summarize the following part of a contract.
-Focus on:
-- obligations
-- payment terms
-- termination
-- risks
+        result = generator(
+         prompt,
+         max_new_tokens=120,
+         do_sample=False,
+         pad_token_id=generator.tokenizer.eos_token_id
+)
 
-Contract part:
-{chunk}
-"""
-    
-    response = client.text_generation(
+        summaries.append(result[0]["generated_text"])
+
+    return "\n\n".join(summaries)
+
+
+def summarize_contract(text: str) -> str:
+    """
+    Summarize full contract text without chunking (fallback).
+    """
+    if not text or len(text.strip()) < 50:
+        return "Text too short to summarize."
+
+    prompt = (
+        "Summarize the following contract in simple terms:\n\n"
+        f"{text[:2000]}\n\nSummary:"
+    )
+
+    result = generator(
         prompt,
         max_new_tokens=200,
-        temperature=0.3
+        do_sample=False
     )
 
-    chunk_summaries.append(responses)
-
-    combined_text = "\n".join(chunk_summaries)
-
-    final_prompt = f"""
-You are a legal expert.
-
-Given the following summaries of different parts of a contract,
-produce a concise overall summary highlighting the key risks,
-important clauses, and obligations.
-
-Summaries:
-{combined_text}
-"""
-    
-    final_summary = client.text_generation(
-        final_prompt,
-        max_new_tokens=300,
-        temperature=0.3
-    )
-
-    return final_summary
+    return result[0]["generated_text"]
