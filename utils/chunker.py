@@ -17,3 +17,4 @@ def chunk_text(
             start = 0
 
     return chunks
+    print("🧩 chunk_text called, text length:", len(text))

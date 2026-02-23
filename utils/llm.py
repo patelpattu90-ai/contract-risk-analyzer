@@ -1,5 +1,3 @@
-# utils/llm.py
-
 from transformers import pipeline
 
 # Load a pure text-generation model (local, stable)
@@ -7,6 +5,10 @@ generator = pipeline(
     "text-generation",
     model="distilgpt2"
 )
+
+# =======================
+# Day 3: Summarization
+# =======================
 
 def summarize_chunks(chunks):
     """
@@ -24,11 +26,11 @@ def summarize_chunks(chunks):
         )
 
         result = generator(
-         prompt,
-         max_new_tokens=120,
-         do_sample=False,
-         pad_token_id=generator.tokenizer.eos_token_id
-)
+            prompt,
+            max_new_tokens=120,
+            do_sample=False,
+            pad_token_id=generator.tokenizer.eos_token_id
+        )
 
         summaries.append(result[0]["generated_text"])
 
@@ -50,7 +52,126 @@ def summarize_contract(text: str) -> str:
     result = generator(
         prompt,
         max_new_tokens=200,
-        do_sample=False
+        do_sample=False,
+        pad_token_id=generator.tokenizer.eos_token_id
     )
 
     return result[0]["generated_text"]
+
+
+# =======================
+# Day 4: Risk Analysis
+# =======================
+
+RISK_PROMPT = """
+The following is a contract clause.
+
+List risks as short bullet points.
+
+Financial Risks:
+- late payment penalties
+
+Legal Risks:
+- liability exposure
+
+Termination Risks:
+- unilateral termination
+
+Ambiguous Clauses:
+- unclear notice period
+
+Contract:
+{chunk}
+
+Answer:
+"""
+
+
+def analyze_single_chunk(chunk: str) -> dict:
+    """
+    Analyze ONE contract chunk and extract risks.
+    """
+    if not chunk or len(chunk.strip()) < 30:
+        return {
+            "financial_risks": [],
+            "legal_risks": [],
+            "termination_risks": [],
+            "ambiguous_clauses": []
+        }
+
+    prompt = RISK_PROMPT.format(chunk=chunk)
+
+    result = generator(
+        prompt,
+        max_new_tokens=150,
+        do_sample=False,
+        pad_token_id=generator.tokenizer.eos_token_id
+    )
+
+    raw_text = result[0]["generated_text"]
+
+    return parse_risk_response(raw_text)
+
+
+def parse_risk_response(text: str) -> dict:
+    risks = {
+        "financial_risks": [],
+        "legal_risks": [],
+        "termination_risks": [],
+        "ambiguous_clauses": []
+    }
+
+    current_section = None
+
+    for line in text.splitlines():
+        line = line.strip().lower()
+
+        if line.startswith("financial risks"):
+            current_section = "financial_risks"
+        elif line.startswith("legal risks"):
+            current_section = "legal_risks"
+        elif line.startswith("termination risks"):
+            current_section = "termination_risks"
+        elif line.startswith("ambiguous clauses"):
+            current_section = "ambiguous_clauses"
+        elif line.startswith("-") and current_section:
+            risks[current_section].append(line[1:].strip())
+
+    # ✅ FALLBACK LOGIC (outside loop, inside function)
+    if not any(risks.values()):
+        text_lower = text.lower()
+
+        if "terminate" in text_lower:
+            risks["termination_risks"].append("unilateral termination clause")
+
+        if "penalt" in text_lower or "late payment" in text_lower:
+            risks["financial_risks"].append("payment penalties")
+
+    return risks
+
+
+def analyze_risks_for_chunks(chunks: list[str]) -> dict:
+    """
+    Analyze risks across all chunks and aggregate results.
+    """
+    aggregated = {
+        "financial_risks": set(),
+        "legal_risks": set(),
+        "termination_risks": set(),
+        "ambiguous_clauses": set()
+    }
+
+    for chunk in chunks:
+        chunk_risks = analyze_single_chunk(chunk)
+
+        aggregated["financial_risks"].update(chunk_risks["financial_risks"])
+        aggregated["legal_risks"].update(chunk_risks["legal_risks"])
+        aggregated["termination_risks"].update(chunk_risks["termination_risks"])
+        aggregated["ambiguous_clauses"].update(chunk_risks["ambiguous_clauses"])
+
+    return {
+        "financial_risks": list(aggregated["financial_risks"]),
+        "legal_risks": list(aggregated["legal_risks"]),
+        "termination_risks": list(aggregated["termination_risks"]),
+        "ambiguous_clauses": list(aggregated["ambiguous_clauses"])
+    }
