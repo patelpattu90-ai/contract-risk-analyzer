@@ -175,3 +175,50 @@ def analyze_risks_for_chunks(chunks: list[str]) -> dict:
         "termination_risks": list(aggregated["termination_risks"]),
         "ambiguous_clauses": list(aggregated["ambiguous_clauses"])
     }
+
+def score_risk_severity(risk_text: str) -> dict:
+    text = risk_text.lower()
+
+    if any(keyword in text for keyword in [
+        "terminate anytime",
+        "without notice",
+        "penalty",
+        "penalties",
+        "unlimited liability",
+        "indemnify"
+    ]):
+        return {
+            "severity": "High",
+            "reason": "High impact or one-sided contractual risk"
+        }
+
+    if any(keyword in text for keyword in [
+        "may terminate",
+        "subject to",
+        "renewal",
+        "reasonable notice"
+    ]):
+        return {
+            "severity": "Medium",
+            "reason": "Conditional or negotiable contractual risk"
+        }
+
+    return {
+        "severity": "Low",
+        "reason": "Minor or ambiguous contractual risk"
+    }
+def enrich_risks_with_severity(risks: dict) -> dict:
+    enriched = {}
+
+    for category, items in risks.items():
+        enriched[category] = []
+
+        for risk in items:
+            score = score_risk_severity(risk)
+            enriched[category].append({
+                "risk": risk,
+                "severity": score["severity"],
+                "reason": score["reason"]
+            })
+
+    return enriched

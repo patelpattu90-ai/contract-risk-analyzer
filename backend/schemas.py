@@ -1,6 +1,6 @@
 # Request - response models
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict
 
 
 # ========= Day 3 =========
@@ -19,8 +19,14 @@ class RiskAnalysisRequest(BaseModel):
     text: str
 
 
+class RiskItem(BaseModel):
+    risk: str
+    severity: str
+    reason: str
+
+
 class RiskAnalysisResponse(BaseModel):
-    financial_risks: List[str]
-    legal_risks: List[str]
-    termination_risks: List[str]
-    ambiguous_clauses: List[str]
+    financial_risks: List[RiskItem]
+    legal_risks: List[RiskItem]
+    termination_risks: List[RiskItem]
+    ambiguous_clauses: List[RiskItem]

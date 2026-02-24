@@ -17,7 +17,7 @@ from backend.schemas import (
 )
 
 from utils.chunker import chunk_text
-from utils.llm import summarize_chunks, analyze_risks_for_chunks
+from utils.llm import summarize_chunks, analyze_risks_for_chunks,  enrich_risks_with_severity
 
 @app.post("/summarize", response_model=
 SummarizeResponse)
@@ -30,4 +30,5 @@ def summarize_contract_api(request: SummarizeRequest):
 def risk_analysis_api(request: RiskAnalysisRequest):
     chunks = chunk_text(request.text)
     risks = analyze_risks_for_chunks(chunks)
-    return risks
+    enriched_risks = enrich_risks_with_severity(risks)
+    return enriched_risks
