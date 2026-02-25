@@ -3,7 +3,7 @@ from transformers import pipeline
 # Load a pure text-generation model (local, stable)
 generator = pipeline(
     "text-generation",
-    model="distilgpt2"
+    model="google/flan-t5-base"
 )
 
 # =======================
@@ -11,52 +11,46 @@ generator = pipeline(
 # =======================
 
 def summarize_chunks(chunks):
-    """
-    Summarize each chunk individually and combine results.
-    """
     summaries = []
 
     for chunk in chunks:
-        if not chunk or len(chunk.strip()) < 30:
+        if not chunk or len(chunk.strip()) < 50:
             continue
 
         prompt = (
-            "Summarize the following contract text in simple terms:\n\n"
-            f"{chunk}\n\nSummary:"
+            "Summarize the following contract text clearly and concisely. "
+            "Focus on obligations, payments, termination, and risks:\n\n"
+            f"{chunk}"
         )
 
-        result = generator(
+        result = summarizer(
             prompt,
-            max_new_tokens=120,
-            do_sample=False,
-            pad_token_id=generator.tokenizer.eos_token_id
+            max_new_tokens=150,
+            do_sample=False
         )
 
-        summaries.append(result[0]["generated_text"])
+        summaries.append(result[0]["generated_text"].strip())
 
-    return "\n\n".join(summaries)
+    return "\n".join(summaries)
 
 
 def summarize_contract(text: str) -> str:
-    """
-    Summarize full contract text without chunking (fallback).
-    """
     if not text or len(text.strip()) < 50:
         return "Text too short to summarize."
 
     prompt = (
-        "Summarize the following contract in simple terms:\n\n"
-        f"{text[:2000]}\n\nSummary:"
+        "Summarize the following contract clearly and concisely. "
+        "Focus on obligations, payments, termination, and risks:\n\n"
+        f"{text[:2000]}"
     )
 
-    result = generator(
+    result = summarizer(
         prompt,
         max_new_tokens=200,
-        do_sample=False,
-        pad_token_id=generator.tokenizer.eos_token_id
+        do_sample=False
     )
 
-    return result[0]["generated_text"]
+    return result[0]["generated_text"].strip()
 
 
 # =======================
