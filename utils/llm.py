@@ -1,7 +1,10 @@
 from transformers import pipeline
 
-# Load a pure text-generation model (local, stable)
-generator = pipeline(
+# =======================
+# Day 6: Instruction-tuned Summarizer
+# =======================
+
+summarizer = pipeline(
     "text-generation",
     model="google/flan-t5-base"
 )
@@ -29,7 +32,8 @@ def summarize_chunks(chunks):
             do_sample=False
         )
 
-        summaries.append(result[0]["generated_text"].strip())
+        generated = result[0]["generated_text"]
+        summaries.append(generated.replace(prompt, "").strip())
 
     return "\n".join(summaries)
 
@@ -50,7 +54,8 @@ def summarize_contract(text: str) -> str:
         do_sample=False
     )
 
-    return result[0]["generated_text"].strip()
+    generated = result[0]["generated_text"]
+    return generated.replace(prompt, "").strip()
 
 
 # =======================
@@ -80,11 +85,12 @@ Contract:
 Answer:
 """
 
+risk_generator = pipeline(
+    "text-generation",
+    model="distilgpt2"
+)
 
 def analyze_single_chunk(chunk: str) -> dict:
-    """
-    Analyze ONE contract chunk and extract risks.
-    """
     if not chunk or len(chunk.strip()) < 30:
         return {
             "financial_risks": [],
@@ -95,15 +101,14 @@ def analyze_single_chunk(chunk: str) -> dict:
 
     prompt = RISK_PROMPT.format(chunk=chunk)
 
-    result = generator(
+    result = risk_generator(
         prompt,
         max_new_tokens=150,
         do_sample=False,
-        pad_token_id=generator.tokenizer.eos_token_id
+        pad_token_id=risk_generator.tokenizer.eos_token_id
     )
 
     raw_text = result[0]["generated_text"]
-
     return parse_risk_response(raw_text)
 
 
@@ -131,13 +136,11 @@ def parse_risk_response(text: str) -> dict:
         elif line.startswith("-") and current_section:
             risks[current_section].append(line[1:].strip())
 
-    # ✅ FALLBACK LOGIC (outside loop, inside function)
+    # Fallback heuristics
     if not any(risks.values()):
         text_lower = text.lower()
-
         if "terminate" in text_lower:
             risks["termination_risks"].append("unilateral termination clause")
-
         if "penalt" in text_lower or "late payment" in text_lower:
             risks["financial_risks"].append("payment penalties")
 
@@ -145,9 +148,6 @@ def parse_risk_response(text: str) -> dict:
 
 
 def analyze_risks_for_chunks(chunks: list[str]) -> dict:
-    """
-    Analyze risks across all chunks and aggregate results.
-    """
     aggregated = {
         "financial_risks": set(),
         "legal_risks": set(),
@@ -157,23 +157,20 @@ def analyze_risks_for_chunks(chunks: list[str]) -> dict:
 
     for chunk in chunks:
         chunk_risks = analyze_single_chunk(chunk)
+        for key in aggregated:
+            aggregated[key].update(chunk_risks[key])
 
-        aggregated["financial_risks"].update(chunk_risks["financial_risks"])
-        aggregated["legal_risks"].update(chunk_risks["legal_risks"])
-        aggregated["termination_risks"].update(chunk_risks["termination_risks"])
-        aggregated["ambiguous_clauses"].update(chunk_risks["ambiguous_clauses"])
+    return {k: list(v) for k, v in aggregated.items()}
 
-    return {
-        "financial_risks": list(aggregated["financial_risks"]),
-        "legal_risks": list(aggregated["legal_risks"]),
-        "termination_risks": list(aggregated["termination_risks"]),
-        "ambiguous_clauses": list(aggregated["ambiguous_clauses"])
-    }
+
+# =======================
+# Day 5: Severity Scoring
+# =======================
 
 def score_risk_severity(risk_text: str) -> dict:
     text = risk_text.lower()
 
-    if any(keyword in text for keyword in [
+    if any(k in text for k in [
         "terminate anytime",
         "without notice",
         "penalty",
@@ -186,7 +183,7 @@ def score_risk_severity(risk_text: str) -> dict:
             "reason": "High impact or one-sided contractual risk"
         }
 
-    if any(keyword in text for keyword in [
+    if any(k in text for k in [
         "may terminate",
         "subject to",
         "renewal",
@@ -201,12 +198,13 @@ def score_risk_severity(risk_text: str) -> dict:
         "severity": "Low",
         "reason": "Minor or ambiguous contractual risk"
     }
+
+
 def enrich_risks_with_severity(risks: dict) -> dict:
     enriched = {}
 
     for category, items in risks.items():
         enriched[category] = []
-
         for risk in items:
             score = score_risk_severity(risk)
             enriched[category].append({
