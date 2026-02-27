@@ -32,11 +32,9 @@ def summarize_chunks(chunks):
             do_sample=False
         )
 
-        generated = result[0]["generated_text"]
-        summaries.append(generated.replace(prompt, "").strip())
+        summaries.append(result[0]["generated_text"].strip())
 
     return "\n".join(summaries)
-
 
 def summarize_contract(text: str) -> str:
     if not text or len(text.strip()) < 50:
@@ -54,9 +52,7 @@ def summarize_contract(text: str) -> str:
         do_sample=False
     )
 
-    generated = result[0]["generated_text"]
-    return generated.replace(prompt, "").strip()
-
+    return result[0]["generated_text"].strip()
 
 # =======================
 # Day 4: Risk Analysis
@@ -214,3 +210,81 @@ def enrich_risks_with_severity(risks: dict) -> dict:
             })
 
     return enriched
+
+def sort_risks_by_severity(enriched_risks: dict) -> dict:
+    severity_order = {"High": 0, "Medium": 1, "Low": 2}
+    sorted_output = {}
+
+    for category, risks in enriched_risks.items():
+        sorted_output[category] = sorted(
+            risks,
+            key=lambda r: severity_order.get(r["severity"], 3)
+        )
+
+    return sorted_output
+
+def generate_executive_summary(sorted_risks: dict) -> str:
+    high = 0
+    medium = 0
+
+    for risks in sorted_risks.values():
+        for r in risks:
+            if r["severity"] == "High":
+                high += 1
+            elif r["severity"] == "Medium":
+                medium += 1
+
+    if high > 0:
+        return (
+            f"This contract contains {high} high-risk clauses that may expose "
+            f"the client to significant legal or financial risk. Immediate review "
+            f"and renegotiation is recommended."
+        )
+
+    if medium > 0:
+        return (
+            f"This contract contains {medium} medium-risk clauses that may require "
+            f"clarification or negotiation before signing."
+        )
+
+    return (
+        "No major risks were identified in this contract. "
+        "The terms appear standard with only minor or low-impact risks."
+    )
+
+def calculate_contract_risk_score(enriched_risks: dict) -> dict:
+    score = 0
+    breakdown = []
+
+    severity_weights = {
+        "High": 30,
+        "Medium": 15,
+        "Low": 5
+    }
+
+    for category, items in enriched_risks.items():
+        for item in items:
+            severity = item.get("severity", "Low")
+            weight = severity_weights.get(severity, 0)
+            score += weight
+
+            breakdown.append({
+                "risk": item["risk"],
+                "severity": severity,
+                "weight": weight
+            })
+
+    score = min(score, 100)
+
+    if score <= 20:
+        label = "Low Risk"
+    elif score <= 50:
+        label = "Medium Risk"
+    else:
+        label = "High Risk"
+
+    return {
+        "score": score,
+        "label": label,
+        "breakdown": breakdown
+    }
